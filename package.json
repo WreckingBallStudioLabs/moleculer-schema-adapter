@@ -1,5 +1,5 @@
 {
-  "name": "moleculer-schema-adapter",
+  "name": "@wrecking-ball-software/moleculer-schema-adapter",
   "version": "0.0.1",
   "description": "An adapter that connects to a Schema service, allowing you to verify and validate communication between services.",
   "main": "index.js",
