@@ -27,4 +27,4 @@ MSA assumes that you are using the Moleculer microservice framework, and have a 
 
 ## Distribution
 
-- Via [NPM](LINK_HERE)
+- Via [NPM](https://www.npmjs.com/package/@wrecking-ball-software/moleculer-schema-adapter)
