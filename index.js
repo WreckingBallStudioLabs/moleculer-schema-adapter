@@ -30,7 +30,7 @@ let retryTracker = 0;
 const matchEventToSchema = (ctx, schemaServiceName, actionName, registeredEvents) => {
 	// Match each event to a schema.
 	Object.keys(registeredEvents).forEach(async (eventName) => {
-		const schema = await ctx.broker.call(`${schemaServiceName}.${actionName}`, {
+		const schema = await ctx.broker.call(`v1.${schemaServiceName}.${actionName}`, {
 			id: eventName
 		});
 
@@ -69,7 +69,7 @@ const matchEventToSchema = (ctx, schemaServiceName, actionName, registeredEvents
  */
 const connect = async (ctx, schemaServiceName, actionName, settings) => {
 	try {
-		await ctx.broker.call(`${schemaServiceName}.ping`);
+		await ctx.broker.call(`v1.${schemaServiceName}.ping`);
 
 		// Update state
 		ctx.settings.connectedToSchemaService = true;
