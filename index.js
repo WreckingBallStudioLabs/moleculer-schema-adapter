@@ -52,6 +52,12 @@ const SCHEMA_INVALID = class SCHEMA_INVALID extends MoleculerError {
 		super("Invalid schema", 500, "SCHEMA_INVALID", error);
 	}
 };
+
+const MISSING_SCHEMA = class MISSING_SCHEMA extends MoleculerError {
+	constructor(action) {
+		super(`${action} requires a schema to validate the payload.  Request has been refused.`);
+	}
+};
 let retryTracker = 0;
 
 //////
@@ -193,7 +199,7 @@ const MoleculerSchemaAdaptor = settings => {
 			// into the current service.
 			settings: {
 				// Schemas will be stored here. This will act as an in-memory cache.
-				schemas: {}
+				schemas: {},
 			},
 			hooks: {
 				before: {
@@ -253,10 +259,7 @@ const MoleculerSchemaAdaptor = settings => {
 							);
 						}
 					} else {
-						ctx.logger.warn(
-							`${ctx.action.name} has been called without validation`
-						);
-						// TODO: Call a notification service?
+						throw new MISSING_SCHEMA(ctx.action.name);
 					}
 				},
 				loadAllSchemasFromDisk: loadAllSchemasFromDisk,
@@ -264,7 +267,10 @@ const MoleculerSchemaAdaptor = settings => {
 			},
 			// Service lifecycle hook
 			started() {
-				loadAllSchemasFromDisk(this, "./schemas");
+				if (process.env.SCHEMA_DIR && path.resolve(process.env.SCHEMA_DIR)) {
+					console.log("======================= LOADING SERVICE SCHEMAS =======================");
+					loadAllSchemasFromDisk(this, process.env.SCHEMA_DIR);
+				}
 			}
 		}
 	};
