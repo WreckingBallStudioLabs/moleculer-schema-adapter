@@ -1,107 +1,147 @@
 /**
  * The intention of this package is to facilitate the integration with a Schema service.
  * The main responsibility of this service is to reduce the burden of managing schemas,
- * and in a distributed way, centralize all schemas used by a system.
+ * and in a decentralized way.
  *
- * Within this package, in an automated way, communication between services can be validated.
- * To achieve that, just add the middleware to the moleculer configuration, and the mixin to the
- * moleculer service.
+ * Service actions are automatically validated if a matching schema exists.  The enable event
+ * validation, the middleware module must be added to the broker middlewares array.
  */
 
 const Ajv = require("ajv");
-const ajv = Ajv({ allErrors: true });
-const { ValidationError } = require("moleculer").Errors;
-
+const ajv = Ajv({
+	allErrors: true
+});
+const path = require("path");
+const fs = require("fs");
+const {
+	ValidationError,
+	MoleculerError
+} = require("moleculer").Errors;
+const PATH_DIRECTORY_DOES_NOT_EXIST = class PATH_DIRECTORY_DOES_NOT_EXIST extends MoleculerError {
+	constructor(pathDirectory, error) {
+		super(
+			`Directory doesn't exists: ${pathDirectory}`,
+			500,
+			"PATH_DIRECTORY_DOES_NOT_EXIST",
+			error
+		);
+	}
+};
+const PATH_FILE_DOES_NOT_EXIST = class PATH_FILE_DOES_NOT_EXIST extends MoleculerError {
+	constructor(pathFile, error) {
+		super(
+			`File doesn't exists: ${pathFile}`,
+			500,
+			"PATH_FILE_DOES_NOT_EXIST",
+			error
+		);
+	}
+};
+const PATH_FAILED_READ_DIRECTORY = class PATH_FAILED_READ_DIRECTORY extends MoleculerError {
+	constructor(pathDirectory, error) {
+		super(
+			`Failed to read content of directory: ${pathDirectory}`,
+			500,
+			"PATH_FAILED_READ_DIRECTORY",
+			error
+		);
+	}
+};
+const SCHEMA_INVALID = class SCHEMA_INVALID extends MoleculerError {
+	constructor(msg, error) {
+		super("Invalid schema", 500, "SCHEMA_INVALID", error);
+	}
+};
 let retryTracker = 0;
 
 //////
 // Convenience functions
 // @see https://softwareengineering.stackexchange.com/a/272812
 //////
-
 /**
- * Connect to the Schema service
+ * Load the specified schema from the FS.
  *
  * @param {Object} ctx context
- * @param {string} schemaServiceName Schema service name
- * @param {string} actionName Action name
- * @param {Array<string>} registeredEvents list of Service's registered events
- */
-const matchEventToSchema = (ctx, schemaServiceName, actionName, registeredEvents) => {
-	// Match each event to a schema.
-	Object.keys(registeredEvents).forEach(async (eventName) => {
-		const schema = await ctx.broker.call(`${schemaServiceName}.${actionName}`, {
-			id: eventName
-		});
-
-		// Safe guard:
-		//
-		// It's possible to exist an event, but not a schema for that.
-		// In this case, it should call the notification system, and report
-		// the anomaly.
-		if (schema) {
-			// Cache schema
-			ctx.settings.schemas[eventName] = schema;
-			ajv.addSchema(ctx.settings.schemas[eventName], eventName);
-			ctx.broker.logger.debug(`Successfully loaded ${eventName} schema`);
-		} else {
-			ctx.broker.logger.error(`Warning: Couldn't found a schema to match the ${eventName} event`);
-
-			// TODO: Integrate with the Notification Service
-		}
-	});
-};
-
-//////
-// Helper functions
-// @see https://softwareengineering.stackexchange.com/a/272812
-//////
-
-/**
- * Connect to the Schema service
+ * @param {string} schemasDirectory schemas directory
+ * @param {string} schemaName schema name
  *
- * @param {Object} ctx context
- * @param {string} schemaServiceName Schema service name
- * @param {string} actionName Action name
- * @param {Object} [settings]
- * @param {number} [settings.retryThreshold=10] How times should try until fail
- * @param {number} [settings.retryTimeout=5000] Timeout, in ms
+ * @throws {PATH_DIRECTORY_DOES_NOT_EXIST}
+ * @throws {PATH_FILE_DOES_NOT_EXIST}
+ * @throws {SCHEMA_INVALID}
+ *
+ * @returns {Object} schema
  */
-const connect = async (ctx, schemaServiceName, actionName, settings) => {
-	try {
-		await ctx.broker.call(`${schemaServiceName}.ping`);
-
-		// Update state
-		ctx.settings.connectedToSchemaService = true;
-
-		const registeredEvents = ctx.schema.events;
-
-		// Only proceed if there are registered events
-		if (Object.keys(registeredEvents).length > 0) {
-			ctx.broker.logger.debug("mixin::started::registeredEvents", registeredEvents);
-			matchEventToSchema(ctx, schemaServiceName, actionName, registeredEvents);
-		} else {
-			ctx.broker.logger.warn("Service has no registered events");
-		}
-	} catch (error) {
-		// Called if service is not available in 10 seconds
-		ctx.broker.logger.warn(`Could not reach ${schemaServiceName} service `);
-
-		if (retryTracker < settings.retryThreshold) {
-			setTimeout(() => {
-				// Update the tracker
-				retryTracker++;
-
-				// Controlled recursive call
-				connect(ctx, schemaServiceName, actionName, settings);
-			}, settings.retryTimeout);
-		} else {
-			// Called if service is not available in 10 seconds
-			ctx.broker.logger.warn(`Failed to retry connection to the ${schemaServiceName} service`);
-
-			// TODO: Integrate with the Notification Service
-		}
+const loadSchemaFromDisk = (ctx, schemasDirectory, schemaName) => {
+	// Build, normalize (Windows/*nix compatible), and resolve the path to the
+	// schema directory
+	const schemaPath = `${schemasDirectory}/${schemaName}.js`;
+	const normalizedSchemaPath = path.normalize(schemaPath);
+	const resolvedSchemaPath = path.resolve(normalizedSchemaPath);
+	// Safe guards:
+	// - Validate directory
+	// - Validate file
+	if (!fs.existsSync(normalizedSchemaPath))
+		throw new PATH_DIRECTORY_DOES_NOT_EXIST(schemasDirectory, null);
+	if (!fs.existsSync(resolvedSchemaPath))
+		throw new PATH_FILE_DOES_NOT_EXIST(schemasDirectory, null);
+	// Safe guard:
+	// - Validate schema
+	//
+	// Load schema from FS, and validate
+	const schema = require(resolvedSchemaPath);
+	const isValid = ajv.validateSchema(schema);
+	console.log(schema, isValid, resolvedSchemaPath);
+	if (!isValid) throw new SCHEMA_INVALID(ajv.errors, null);
+	// AJV: It isn't possible to manually cache schemas (in-memory), as such
+	// functionality isn't exposed via the API, but calling `compile` will
+	// create the cache.
+	//
+	// Note that `compile` also performs validation, but if the schema is
+	// invalid, AJV will automatically throw errors. I purposely split the
+	// process into two steps, to gain more fine-grained controls.
+	ajv.compile(schema);
+	// Cache at service level, via Moleculer Broker Cacher (redis)
+	if (ctx && Object.keys(ctx).includes("broker")) {
+		ctx.logger.info(`Cached ${schemaName}`);
+		ctx.broker.cacher.set(schemaName, schema);
+		ctx.settings.schemas[schemaName] = schema;
 	}
+	return schema;
+};
+/**
+ * Load all schemas in a given directory
+ *
+ * @see scripts/benchmark-loadAllSchemasFromDisk.js
+ *
+ * @param {Object} ctx context
+ * @param {string} schemasDirectory schemas directory
+ *
+ * @throws {PATH_FAILED_READ_DIRECTORY}
+ *
+ * @returns {Array<Object>} schemas
+ */
+const loadAllSchemasFromDisk = (ctx, schemasDirectory) => {
+	// Build path
+	const normalizedDirectoryPath = path.normalize(schemasDirectory);
+	const resolvedDirectoryPath = path.resolve(normalizedDirectoryPath);
+	const schemas = [];
+	try {
+		const listOfFilenames = fs.readdirSync(resolvedDirectoryPath);
+		const setOfFilenamesWithoutExtension = new Set();
+		listOfFilenames.forEach(filename => {
+			setOfFilenamesWithoutExtension.add(
+				filename.substring(0, filename.indexOf(".js"))
+			);
+		});
+		// Deduplication by using `Set`
+		// @see scripts/benchmark-loadAllSchemasFromDisk.js
+		setOfFilenamesWithoutExtension.forEach(entry => {
+			schemas.push(loadSchemaFromDisk(ctx, schemasDirectory, entry));
+		});
+	} catch (error) {
+		throw new PATH_FAILED_READ_DIRECTORY(resolvedDirectoryPath, error);
+	}
+	return schemas;
 };
 
 //////
@@ -114,19 +154,11 @@ const connect = async (ctx, schemaServiceName, actionName, settings) => {
  * @param {string} [schemaServiceName=schema] Moleculer Schema service name
  * @param {string} [actionName=fetch] Action to call
  * @param {Object} [settings]
- * @param {number} [settings.retryThreshold=10] How times should try until fail
- * @param {number} [settings.retryTimeout=5000] Timeout, in ms
  */
-const MoleculerSchemaAdaptor = (schemaServiceName, actionName, settings) => {
-	// Default options
-	schemaServiceName = schemaServiceName || "schema";
-	actionName = actionName || "fetch";
-
+const MoleculerSchemaAdaptor = settings => {
+	// TODO: Settings can be used later to wire in a notification type service
 	if (!settings) settings = {};
-	Object.assign(settings, {
-		retryThreshold: 10,
-		retryTimeout: 5000 // in ms
-	});
+	Object.assign(settings, {});
 
 	return {
 		middleware: {
@@ -134,12 +166,16 @@ const MoleculerSchemaAdaptor = (schemaServiceName, actionName, settings) => {
 			localEvent(next, broker) {
 				return (payload, sender, topic) => {
 					// Call method
-					broker.service.validateEvent(payload, sender, topic)
+					broker.service
+						.validateEvent(payload, sender, topic)
 						// Validation succeed :)
 						.then(() => {})
 						// Validation failed :(
-						.catch((error) => {
-							this.logger.error("middleware::localEvent::return::validateEvent::invalid", error);
+						.catch(error => {
+							this.logger.error(
+								"middleware::localEvent::return::validateEvent::invalid",
+								error
+							);
 
 							// TODO: Also handle rejection by calling the Notification Service
 						});
@@ -152,13 +188,24 @@ const MoleculerSchemaAdaptor = (schemaServiceName, actionName, settings) => {
 		// When a service uses mixins, all properties in the mixin will be “mixed”, merged,
 		// into the current service.
 		mixin: {
-			name: "",
+			// The Moleculer Service constructor merges these mixins with the current schema.
+			// When a service uses mixins, all properties in the mixin will be “mixed”, merged,
+			// into the current service.
 			settings: {
-				// "State machine"
-				connectedToSchemaService: false,
-
 				// Schemas will be stored here. This will act as an in-memory cache.
 				schemas: {}
+			},
+			hooks: {
+				before: {
+					// All actions are processed through the validateAction hook.  If a schema
+					// is available, the request will be validated.
+					"*": "validateAction"
+				}
+			},
+			actions: {
+				listSchemas(ctx) {
+					return this.settings.schemas || []
+				}
 			},
 			// Wait for the Schema service be up and running
 			// dependencies: [schemaServiceName],
@@ -176,20 +223,48 @@ const MoleculerSchemaAdaptor = (schemaServiceName, actionName, settings) => {
 				 */
 				validateEvent(payload, sender, eventName) {
 					return new Promise((resolve, reject) => {
-						if (!this.settings.connectedToSchemaService) {
-							this.logger.warn(`Event ${eventName} was processed without validation. Schema service connection is offline`);
-							resolve();
-						}
-						if (!ajv.validate(this.settings.schemas[eventName], payload)) {
-							return reject(new ValidationError(`${sender} emitted an invalid payload for the ${eventName} event`, ajv.errors));
+						if (
+							!ajv.validate(
+								this.settings.schemas[eventName],
+								payload
+							)
+						) {
+							return reject(
+								new ValidationError(
+									`${sender} emitted an invalid payload for the ${eventName} event`,
+									ajv.errors
+								)
+							);
 						}
 						return resolve();
 					});
-				}
+				},
+				async validateAction(ctx) {
+					if (this.settings.schemas[ctx.action.name]) {
+						if (
+							!ajv.validate(
+								this.settings.schemas[ctx.action.name],
+								ctx.params
+							)
+						) {
+							throw new ValidationError(
+								`Invalid payload for the ${ctx.action.name} event`,
+								ajv.errors
+							);
+						}
+					} else {
+						ctx.logger.warn(
+							`${ctx.action.name} has been called without validation`
+						);
+						// TODO: Call a notification service?
+					}
+				},
+				loadAllSchemasFromDisk: loadAllSchemasFromDisk,
+				loadSchemaFromDisk: loadSchemaFromDisk
 			},
 			// Service lifecycle hook
 			started() {
-				connect(this, schemaServiceName, actionName, settings);
+				loadAllSchemasFromDisk(this, "./schemas");
 			}
 		}
 	};
