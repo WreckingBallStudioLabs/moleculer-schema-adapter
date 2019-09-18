@@ -1,10 +1,11 @@
 /**
- * The intention of this package is to facilitate the integration with a Schema service.
- * The main responsibility of this service is to reduce the burden of managing schemas,
- * and in a decentralized way.
+ * The intention of this package is to provide schema validation for incoming
+ * requests for both actions and events. It allows each service to act as a
+ * decentralized schema validation authority.
  *
- * Service actions are automatically validated if a matching schema exists.  The enable event
- * validation, the middleware module must be added to the broker middlewares array.
+ * These incoming requests are automatically validated if a matching schema
+ * exists. To enable it, the returned middleware must be added to the broker
+ * middlewares array and the mixin to the mixin array.
  */
 
 const Ajv = require("ajv");
