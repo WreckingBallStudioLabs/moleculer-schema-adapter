@@ -17,6 +17,11 @@ const {
 	ValidationError,
 	MoleculerError
 } = require("moleculer").Errors;
+
+//////
+// Custome Names Errors
+//////
+
 const PATH_DIRECTORY_DOES_NOT_EXIST = class PATH_DIRECTORY_DOES_NOT_EXIST extends MoleculerError {
 	constructor(pathDirectory, error) {
 		super(
@@ -48,22 +53,22 @@ const PATH_FAILED_READ_DIRECTORY = class PATH_FAILED_READ_DIRECTORY extends Mole
 	}
 };
 const SCHEMA_INVALID = class SCHEMA_INVALID extends MoleculerError {
-	constructor(msg, error) {
+	constructor(error) {
 		super("Invalid schema", 500, "SCHEMA_INVALID", error);
 	}
 };
 
 const MISSING_SCHEMA = class MISSING_SCHEMA extends MoleculerError {
 	constructor(action) {
-		super(`${action} requires a schema to validate the payload.  Request has been refused.`);
+		super(`${action} requires a schema to validate the payload. Request has been refused.`);
 	}
 };
-let retryTracker = 0;
 
 //////
 // Convenience functions
 // @see https://softwareengineering.stackexchange.com/a/272812
 //////
+
 /**
  * Load the specified schema from the FS.
  *
@@ -83,6 +88,7 @@ const loadSchemaFromDisk = (ctx, schemasDirectory, schemaName) => {
 	const schemaPath = `${schemasDirectory}/${schemaName}.js`;
 	const normalizedSchemaPath = path.normalize(schemaPath);
 	const resolvedSchemaPath = path.resolve(normalizedSchemaPath);
+
 	// Safe guards:
 	// - Validate directory
 	// - Validate file
@@ -90,14 +96,16 @@ const loadSchemaFromDisk = (ctx, schemasDirectory, schemaName) => {
 		throw new PATH_DIRECTORY_DOES_NOT_EXIST(schemasDirectory, null);
 	if (!fs.existsSync(resolvedSchemaPath))
 		throw new PATH_FILE_DOES_NOT_EXIST(schemasDirectory, null);
+
 	// Safe guard:
 	// - Validate schema
 	//
 	// Load schema from FS, and validate
 	const schema = require(resolvedSchemaPath);
 	const isValid = ajv.validateSchema(schema);
-	console.log(schema, isValid, resolvedSchemaPath);
+
 	if (!isValid) throw new SCHEMA_INVALID(ajv.errors, null);
+
 	// AJV: It isn't possible to manually cache schemas (in-memory), as such
 	// functionality isn't exposed via the API, but calling `compile` will
 	// create the cache.
@@ -106,18 +114,19 @@ const loadSchemaFromDisk = (ctx, schemasDirectory, schemaName) => {
 	// invalid, AJV will automatically throw errors. I purposely split the
 	// process into two steps, to gain more fine-grained controls.
 	ajv.compile(schema);
+
 	// Cache at service level, via Moleculer Broker Cacher (redis)
 	if (ctx && Object.keys(ctx).includes("broker")) {
 		ctx.logger.info(`Cached ${schemaName}`);
 		ctx.broker.cacher.set(schemaName, schema);
 		ctx.settings.schemas[schemaName] = schema;
 	}
+
 	return schema;
 };
+
 /**
  * Load all schemas in a given directory
- *
- * @see scripts/benchmark-loadAllSchemasFromDisk.js
  *
  * @param {Object} ctx context
  * @param {string} schemasDirectory schemas directory
@@ -131,14 +140,17 @@ const loadAllSchemasFromDisk = (ctx, schemasDirectory) => {
 	const normalizedDirectoryPath = path.normalize(schemasDirectory);
 	const resolvedDirectoryPath = path.resolve(normalizedDirectoryPath);
 	const schemas = [];
+
 	try {
 		const listOfFilenames = fs.readdirSync(resolvedDirectoryPath);
 		const setOfFilenamesWithoutExtension = new Set();
+
 		listOfFilenames.forEach(filename => {
 			setOfFilenamesWithoutExtension.add(
 				filename.substring(0, filename.indexOf(".js"))
 			);
 		});
+
 		// Deduplication by using `Set`
 		// @see scripts/benchmark-loadAllSchemasFromDisk.js
 		setOfFilenamesWithoutExtension.forEach(entry => {
@@ -147,6 +159,7 @@ const loadAllSchemasFromDisk = (ctx, schemasDirectory) => {
 	} catch (error) {
 		throw new PATH_FAILED_READ_DIRECTORY(resolvedDirectoryPath, error);
 	}
+
 	return schemas;
 };
 
@@ -185,6 +198,7 @@ const MoleculerSchemaAdaptor = settings => {
 
 							// TODO: Also handle rejection by calling the Notification Service
 						});
+
 					return next(payload, sender, topic);
 				};
 			}
@@ -209,7 +223,7 @@ const MoleculerSchemaAdaptor = settings => {
 				}
 			},
 			actions: {
-				listSchemas(ctx) {
+				listSchemas() {
 					return this.settings.schemas || []
 				}
 			},
@@ -217,7 +231,7 @@ const MoleculerSchemaAdaptor = settings => {
 			// dependencies: [schemaServiceName],
 			methods: {
 				/**
-				 * Validate the payload against the matching schema
+				 * Validate the event payload against the matching schema
 				 *
 				 * @param {Object} payload incoming data
 				 * @param {string} sender service that send the event
@@ -242,26 +256,41 @@ const MoleculerSchemaAdaptor = settings => {
 								)
 							);
 						}
+
 						return resolve();
 					});
 				},
+				/**
+				 * Validate the action payload against the matching schema
+				 *
+				 * @param {Object} payload incoming data
+				 * @param {string} sender service that send the event
+				 * @param {string} eventName evnt name
+				 *
+				 * @throws {ValidationError}
+				 *
+				 * @returns {Promise}
+				 */
 				async validateAction(ctx) {
-					if (this.settings.schemas[ctx.action.name]) {
+					const actionName = ctx.action.name;
+
+					if (this.settings.schemas[actionName]) {
 						if (
 							!ajv.validate(
-								this.settings.schemas[ctx.action.name],
+								this.settings.schemas[actionName],
 								ctx.params
 							)
 						) {
 							throw new ValidationError(
-								`Invalid payload for the ${ctx.action.name} event`,
+								`Invalid payload for the ${actionName} event`,
 								ajv.errors
 							);
 						}
 					} else {
-						throw new MISSING_SCHEMA(ctx.action.name);
+						throw new MISSING_SCHEMA(actionName);
 					}
 				},
+
 				loadAllSchemasFromDisk: loadAllSchemasFromDisk,
 				loadSchemaFromDisk: loadSchemaFromDisk
 			},
@@ -270,6 +299,9 @@ const MoleculerSchemaAdaptor = settings => {
 				if (process.env.SCHEMA_DIR && path.resolve(process.env.SCHEMA_DIR)) {
 					console.log("======================= LOADING SERVICE SCHEMAS =======================");
 					loadAllSchemasFromDisk(this, process.env.SCHEMA_DIR);
+				} else {
+					// TODO: Should it throw an error?
+					console.log("Warning, SCHEMA_DIR isn't defined. Skipping schema validation!");
 				}
 			}
 		}
