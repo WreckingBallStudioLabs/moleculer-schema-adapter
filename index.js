@@ -65,6 +65,12 @@ const MISSING_SCHEMA = class MISSING_SCHEMA extends MoleculerError {
 	}
 };
 
+const MISSING_SCHEMA_DIR_ENV_VAR = class MISSING_SCHEMA_DIR_ENV_VAR extends MoleculerError {
+	constructor() {
+		super("Is SCHEMA_DIR defined?");
+	}
+};
+
 //////
 // Convenience functions
 // @see https://softwareengineering.stackexchange.com/a/272812
@@ -301,8 +307,7 @@ const MoleculerSchemaAdaptor = settings => {
 					console.log("======================= LOADING SERVICE SCHEMAS =======================");
 					loadAllSchemasFromDisk(this, process.env.SCHEMA_DIR);
 				} else {
-					// TODO: Should it throw an error?
-					console.log("Warning, SCHEMA_DIR isn't defined. Skipping schema validation!");
+					throw new MISSING_SCHEMA_DIR_ENV_VAR();
 				}
 			}
 		}
