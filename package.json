@@ -1,35 +1,36 @@
 {
-  "name": "@wrecking-ball-software/moleculer-schema-adapter",
-  "version": "0.0.2",
-  "description": "An adapter that connects to a Schema service, allowing you to verify and validate communication between services.",
-  "main": "index.js",
-  "repository": {
-    "type": "git",
-    "url": "git@github.com:WreckingBallStudioLabs/moleculer-schema-adapter.git"
-  },
-  "keywords": [
-    "moleculer",
-    "mixin",
-    "adaptor",
-    "middleware",
-    "schema"
-  ],
-  "author": "Thales Pinheiro <thales@bravocognos.com>",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/WreckingBallStudioLabs/moleculer-schema-adapter/issues"
-  },
-  "homepage": "https://github.com/WreckingBallStudioLabs/moleculer-schema-adapter#readme",
-  "devDependencies": {
-    "babel-eslint": "^10.0.3",
-    "eslint": "^6.2.2",
-    "eslint-plugin-import": "^2.18.2"
-  },
-  "dependencies": {
-    "ajv": "^6.10.2",
-    "moleculer": "^0.13.10"
-  },
-  "engines": {
-    "node": ">= 12.x.x"
-  }
+    "name": "@wrecking-ball-software/moleculer-schema-adapter",
+    "version": "0.1.0",
+    "description": "An adapter that allows events and actions parameters to be validated against JSON schemas",
+    "main": "index.js",
+    "repository": {
+        "type": "git",
+        "url": "git@github.com:WreckingBallStudioLabs/moleculer-schema-adapter.git"
+    },
+    "keywords": [
+        "moleculer",
+        "mixin",
+        "adaptor",
+        "middleware",
+        "schema"
+    ],
+    "author": "Thales Pinheiro <thales@bravocognos.com>",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/WreckingBallStudioLabs/moleculer-schema-adapter/issues"
+    },
+    "homepage": "https://github.com/WreckingBallStudioLabs/moleculer-schema-adapter#readme",
+    "devDependencies": {
+        "babel-eslint": "^10.0.3",
+        "eslint": "^6.2.2",
+        "eslint-plugin-import": "^2.18.2"
+    },
+    "dependencies": {
+        "ajv": "^6.10.2",
+        "moleculer": "^0.13.10",
+        "require-dir": "^1.2.0"
+    },
+    "engines": {
+        "node": ">= 12.x.x"
+    }
 }

@@ -2,7 +2,7 @@
 
 # moleculer-schema-adapter (MSA)
 
-<p align="justify">An adapter that connects to a Schema service, allowing you to verify and validate communication between services.</p>
+<p align="justify">An adapter that allows events and actions parameters to be validated against JSON schemas.</p>
 
 ## Table of Contents
 
@@ -12,18 +12,17 @@
 
 ## Requirements
 
-MSA assumes that you are using the Moleculer microservice framework, and have a moleculer Schema service. This service should provide valid JSON Schemas via an action (default name: `fetch`), by `id` where `id` should be the name of the schema. MSA is flexible, allowing the developer to set:
+MSA assumes that you are using the Moleculer microservice framework.
 
-- Name of the Schema service, default lookup: `schema`
-- Name of the action, default lookup: `fetch`
-- Wait time (dependency timeout), default value: `10000` (in ms)
+## How it works
+
+When `MSA` loads, it reads the schema directory, validating and caching all schemas. Subsequently, `MSA` chooses the schema to use based on the name of the event or action.
 
 ## Usage
 
-- Require the package
-- Add the middleware to the service configuration
-- Add the mixin to the service
-
+- Require the package;
+- Add the middleware to the service configuration;
+- Add the mixin to the service;
 
 ## Distribution
 
