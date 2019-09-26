@@ -7,7 +7,7 @@ const ajv = Ajv({
 	allErrors: true
 });
 
-const CNE = require("./errors");
+const Errors = require("./errors");
 
 /**
  * Process(validate, and cache) a schema.
@@ -19,7 +19,7 @@ const CNE = require("./errors");
  * @throws {SCHEMA_INVALID}
  */
 const processSchema = (ctx, schemaName, schema) => {
-	if (!ajv.validateSchema(schema)) throw new CNE.SCHEMA_INVALID(ajv.errors, null);
+	if (!ajv.validateSchema(schema)) throw new Errors.SCHEMA_INVALID(ajv.errors, null);
 
 	// AJV: It isn't possible to manually cache schemas (in-memory), as such
 	// functionality isn't exposed via the API, but calling `compile` will
@@ -71,7 +71,7 @@ const loadAllSchemasFromDisk = (ctx, schemasDirectory) => {
 			)
 		);
 	} catch (error) {
-		throw new CNE.PATH_FAILED_READ_DIRECTORY(resolvedDirectoryPath, error);
+		throw new Errors.PATH_FAILED_READ_DIRECTORY(resolvedDirectoryPath, error);
 	}
 
 	// Process each schema: validate, and cache
@@ -79,7 +79,7 @@ const loadAllSchemasFromDisk = (ctx, schemasDirectory) => {
 		try {
 			processSchema(ctx, schemaName, schema);
 		} catch (error) {
-			throw new CNE.PATH_FAILED_TO_PROCESS_SCHEMA(schemaName, error);
+			throw new Errors.PATH_FAILED_TO_PROCESS_SCHEMA(schemaName, error);
 		}
 	});
 };
