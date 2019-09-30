@@ -29,12 +29,11 @@ const CNE = require("./errors");
  * @param {string} [settings.schemaDir="schemas"] Schemas folder
  */
 const MoleculerSchemaAdaptor = settings => {
-	// Default values
-	if (!settings) settings = {};
 
-	Object.assign(settings, {
-		schemaDir: "schemas"
-	});
+	// Default values
+	if (!settings) settings = {
+		schemaDir: process.env.SCHEMA_DIR || "schemas"
+	};
 
 	return {
 		middleware: {
