@@ -108,6 +108,9 @@ const MoleculerSchemaAdaptor = settings => {
 				 * @throws {MISSING_SCHEMA}
 				 */
 				validateAction(ctx) {
+					// Bypass its own action
+					if (ctx.action.rawName === "listSchemas") return;
+
 					const actionName = ctx.action.name;
 
 					if (this.settings.schemas[actionName]) {
