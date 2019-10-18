@@ -66,7 +66,7 @@ const loadAllSchemasFromDisk = (ctx, schemasDirectory) => {
 		schemasMap = new Map(
 			Object.entries(
 				requireDir(resolvedDirectoryPath, {
-					extensions: [".ts", ".js"]
+					extensions: [".ts", ".js", ".json"]
 				})
 			)
 		);
